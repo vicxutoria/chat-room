@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <title>Chat Site</title>
+    </head>
+    <body id="main">
+        <h1><a href="client.html">Chat Site</a></h1>
+        <div id="loginform">
+            Enter A Username: <input type="text" onfocus="this.value='';" id="username" required/><br>
+            <input value="Join" name="Join" id="join" type="button"/>
+            <input value="Exit" name="Exit" id="exit" type="button"/><br><br>
+        </div>
+        <div id="chatclientbody">
+            <div class="row" id="createchatroom">
+                <div class="col-sm-4">
+                    Create Chat Room Name: <input type="text" onfocus="this.value='';" name="roomname" id="roomname"/><br>
+                    Create Room Password (optional): <input type="password" onfocus="this.value='';" id="roompass" name="roompass"/><br><br><br><br>
+                    <input value="Create Room" id="createroom" name="createroom" type="button"/><br>
+                </div>
+                <div class="col-sm-4">
+                    <select size="5" id="publicrooms" name="publicrooms"></select><br><br>
+                    <input name="joinpublicroom" id="joinpublicroom" value="Join a Public Room" type="button"/>
+                    <input name="deletepublicroom" id="deletepublicroom" value="Delete a Public Room" type="button"/><br>
+                </div>
+                <div class="col-sm-4">
+                    <select size="5" id="privaterooms" name="privaterooms"></select><br>
+                    Enter Room Password: <input type="password" id="privpass" name="privpass" onfocus="this.value='';"/><br>
+                    <input name="joinprivateroom" id="joinprivateroom" value="Join a Private Room" type="button"/>
+                    <input name="deleteprivateroom" id="deleteprivateroom" value="Delete a Private Room" type="button"/><br>
+                </div>
+                <div class="col-sm-4">
+                    <br>Users:<br>
+                    <select size="5" id="usersinroom" name="usersinroom" multiple></select><br>
+                    <input name="enableusers" id="enableusers" value="Enable User(s)" type="button"/>
+                    <input name="disableusers" id="disableusers" value="Disable User(s)" type="button"/>
+                    <input name="removeusers" id="removeusers" value="Remove User(s)" type="button"/><br>
+                </div>
+            </div>
+            <div id="currentroom">
+                <div class="row">
+                    <div class="col-sm-4">
+                        Current Room: <input type="text" id="chatroom" readonly/><br>
+                        Public Chat: <br>
+                        <textarea cols="50" rows="10" id="messagelog" readonly></textarea><br>
+                    </div>
+                    <div class="col-sm-4">
+                        <br>Direct Messages: <br>
+                        <textarea cols="50" rows="10" id="directmessage" readonly></textarea><br>
+                    </div>
+                </div>
+                <textarea cols="100" rows="2" id="messageinput" onfocus="this.value='';"></textarea>
+                Direct Message With (enter a username): <input type="text" id="dmuser"/>
+                <input value="Send" id ="sendmsg" type="button"/>
+            </div>
+        </div>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+            var socketio = io.connect();
+            var userloggedin = false;
+            var curuser = null;
+            var roomowner = [];
+            var chatRoom = document.getElementById("chatroom"); 
+            
+            document.getElementById("join").addEventListener("click", login, false);
+            document.getElementById("exit").addEventListener("click", logout, false);
+            document.getElementById("createroom").addEventListener("click", createroom, false);
+            document.getElementById("joinpublicroom").addEventListener("click", joinpublicroom, false);
+            document.getElementById("deletepublicroom").addEventListener("click", deletepublicroom, false);
+            document.getElementById("joinprivateroom").addEventListener("click", joinprivateroom, false);
+            document.getElementById("deleteprivateroom").addEventListener("click", deleteprivateroom, false);
+            document.getElementById("enableusers").addEventListener("click", enableusers, false);
+            document.getElementById("disableusers").addEventListener("click", disableusers, false);
+            document.getElementById("removeusers").addEventListener("click", removeusers, false);
+            document.getElementById("sendmsg").addEventListener("click", sendmsg, false);
+            refreshPage();
+            
+            function login(){
+                var username = document.getElementById("username").value;
+                if(username == "" || username == null){
+                    alert("Please enter a username!");
+                    return;
+                }
+                socketio.emit("userlogin", username);
+                curuser = username;
+                userloggedin = true;
+                refreshPage();
+                document.getElementById("messagelog").hidden = chatRoom.value === "";
+                document.getElementById("messageinput").hidden = chatRoom.value === "";
+                document.getElementById("sendmsg").hidden = chatRoom.value === "";
+            }
+            
+            function logout(){
+                socketio.emit("userlogout", curuser);
+                userloggedin = false;
+                refreshPage();
+            }
+            
+            function createroom(){
+                var roomname = document.getElementById("roomname").value;
+                if(roomname == "" || roomname == null){
+                    alert("Please enter a room name!");
+                    return;
+                }
+                roomowner.push(roomname);
+                var password = document.getElementById("roompass").value;
+                socketio.emit("createroom", curuser, roomname, password);
+            }
+            
+            function joinpublicroom(){
+                var roomname = document.getElementById("publicrooms").value;
+                if(roomname == "" || roomname == null){
+                    alert("Please select a room to join!");
+                    return;
+                }
+                chatRoom.value = roomname;
+                socketio.emit("joinpublicroom", curuser, roomname);
+                document.getElementById("messagelog").value = "";
+                document.getElementById("messageinput").value = "";
+                document.getElementById("directmessage").value = "";
+                
+                document.getElementById("messagelog").hidden = chatRoom.value == "";
+                document.getElementById("messageinput").hidden = chatRoom.value == "";
+                document.getElementById("directmessage").hidden = chatRoom.value == "";
+                document.getElementById("sendmsg").hidden = chatRoom.value == "";
+                document.getElementById("dmuser").hidden = chatRoom.value == "";
+            }
+            
+            function deletepublicroom(){
+                var roomname = document.getElementById("publicrooms").value;
+                if(roomowner.indexOf(roomname) == -1){
+                    alert("Cannot delete a room if not room owner!");
+                    return;
+                }
+                if(roomname == "" || roomname == null){
+                    alert("Please select a room to delete!");
+                    return;
+                }
+                socketio.emit("deletepublicroom", roomname);
+            }
+            
+            function joinprivateroom(){
+                var roomname = document.getElementById("privaterooms").value;
+                if(roomname == "" || roomname == null){
+                    alert("Please select a room to join!");
+                    return;
+                }
+                var password = document.getElementById("privpass").value;
+                socketio.emit("joinprivateroom", curuser, roomname, password);
+            }
+            
+            function deleteprivateroom(){
+                var roomname = document.getElementById("privaterooms").value;
+                if(roomowner.indexOf(roomname) == -1){
+                    alert("Cannot delete a room if not room owner!");
+                    return;
+                }
+                if(roomname == "" || roomname == null){
+                    alert("Please select a room to delete!");
+                    return;
+                }
+                socketio.emit("deleteprivateroom", roomname);
+            }
+            
+            function enableusers(){
+                var userslist = [];
+                var username = document.getElementById("usersinroom");
+                for(var i = 0; i < username.options.length; ++i){
+                    if(username.options[i].selected == true && username.options[i].value.indexOf("(disabled)") != -1){
+                        userslist.push(username.options[i].value);
+                    }
+                }
+                socketio.emit("enableusers", userslist, chatRoom.value);
+            }
+            
+            function disableusers(){
+                var userslist = [];
+                var username = document.getElementById("usersinroom");
+                for(var i = 0; i < username.options.length; ++i){
+                    if(username.options[i].selected == true && username.options[i].value.indexOf("(disabled)") == -1){
+                        userslist.push(username.options[i].value);
+                    }
+                }
+                socketio.emit("disableusers", userslist, chatRoom.value);
+            }
+            
+            function removeusers(){
+                var userslist = [];
+                var username = document.getElementById("usersinroom");
+                for(var i = 0; i < username.options.length; ++i){
+                    if(username.options[i].selected == true){
+                        userslist.push(username.options[i].value);
+                    }
+                }
+                var banuser = prompt("Do you want to ban these user(s) permanently? (YES or NO)");
+                socketio.emit("removeusers", userslist, chatRoom.value, banuser);
+            }
+            
+            function sendmsg(){
+                var msg = document.getElementById("messageinput").value;
+                var touser = document.getElementById("dmuser").value;
+                var roomname = chatRoom.value;
+                socketio.emit("sendmsg", curuser, msg, touser, roomname);
+            }
+            
+            function refreshPage(){
+                document.getElementById("chatclientbody").hidden = userloggedin === false;
+                document.getElementById("exit").hidden = userloggedin === false;
+                document.getElementById("join").hidden = userloggedin === true;
+                
+                document.getElementById("messagelog").hidden = chatRoom.value == "";
+                document.getElementById("messageinput").hidden = chatRoom.value == "";
+                document.getElementById("directmessage").hidden = chatRoom.value == "";
+                document.getElementById("sendmsg").hidden = chatRoom.value == "";
+                document.getElementById("dmuser").hidden = chatRoom.value == "";
+            }
+            
+            socketio.on("publicroomlist", function(data){
+                document.getElementById("publicrooms").innerHTML = createOptions(data['message']);
+            });
+            
+            socketio.on('privateroomlist', function(data){
+                document.getElementById("privaterooms").innerHTML = createPrivOpts(data['message']);
+            });
+            
+            socketio.on("usersinroom", function(data){
+                var users = data['message'];
+                if(roomowner.indexOf(chatRoom.value) != -1){
+                    document.getElementById("enableusers").hidden = false;
+                    document.getElementById("disableusers").hidden = false;
+                    document.getElementById("removeusers").hidden = false;
+                }
+                else{
+                    document.getElementById("enableusers").hidden = true;
+                    document.getElementById("disableusers").hidden = true;
+                    document.getElementById("removeusers").hidden = true;
+                }
+                document.getElementById("usersinroom").innerHTML = createOptions(data['message']);
+                if(data['message'].indexOf(curuser+"(disabled)") != -1){
+                    document.getElementById("sendmsg").hidden = true;
+                }
+                else{
+                    document.getElementById("sendmsg").hidden = false;
+                }
+            });
+            
+            socketio.on("displaymsg", function(username, msg){
+                document.getElementById("messagelog").value += username+": "+msg+"\r\n";
+            });
+            
+            socketio.on("directmessage", function(fromuser, tosuer, msg){
+                document.getElementById("directmessage").value += fromuser+": "+msg+"\r\n";
+            });
+            
+            socketio.on("errormessage", function(username, errormsg){
+                if(curuser == username){
+                    alert(errormsg);
+                }
+            });
+            
+            socketio.on("banmessagetoroom", function(username, errormsg){
+                if(curuser == username){
+                    alert(errormsg);
+                    chatRoom.value="";
+                }
+            });
+            
+            socketio.on("errormessagetoroom", function(errormsg){
+                alert(errormsg);
+                chatRoom.value = "";
+            });
+            
+            socketio.on("enterroomsuccess", function(username, roomname){
+                if(curuser == username){
+                    chatRoom.value = roomname;
+                    document.getElementById("messagelog").hidden = chatRoom.value === "";
+                    document.getElementById("messageinput").hidden = chatRoom.value === "";
+                    document.getElementById("sendmsg").hidden = chatRoom.value === "";
+                }
+            });
+            
+            function createOptions(rooms){
+                var optStr = "";
+                for(i = 0; i < rooms.length; ++i){
+                    optStr += "<option value=\""+rooms[i]+"\">"+rooms[i]+"</option>\"";
+                }
+                return optStr;
+            }
+            
+            function createPrivOpts(rooms){
+                var privOptStr = "";
+                for(var r in rooms){
+                    privOptStr += "<option value=\""+r+"\">"+r+"</option>\"";
+                }
+                return privOptStr;
+            }
+        </script>
+    </body>
+</html>
